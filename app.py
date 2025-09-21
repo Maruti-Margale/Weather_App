@@ -138,17 +138,3 @@ if search_button:
                 st.write(f"High: {day['temp_max']}°C")
                 st.write(f"Low: {day['temp_min']}°C")
         
-        # --- Display ML Prediction ---
-        st.write("---")
-        st.subheader("Predict Future Temperature")
-        if ml_model:
-            prediction_date_str = st.date_input("Select a date for prediction")
-            predict_button = st.button("Predict")
-            
-            if predict_button:
-                prediction_date = prediction_date_str
-                features = [[prediction_date.month, prediction_date.timetuple().tm_yday]]
-                predicted_temp = round(ml_model.predict(features)[0])
-                st.success(f"Predicted Temperature for {prediction_date}: {predicted_temp}°C")
-        else:
-            st.warning(model_status)
