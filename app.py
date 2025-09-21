@@ -37,7 +37,8 @@ def get_weather_data(city):
         
         lat = data['coord']['lat']
         lon = data['coord']['lon']
-        forecast_data = get_daily_forecast(lat, lon)
+        # Call the new function to get the 5-day forecast
+        forecast_data = get_5_day_forecast(city)
 
         sunrise = datetime.fromtimestamp(data["sys"]["sunrise"]).strftime("%I:%M %p")
         sunset = datetime.fromtimestamp(data["sys"]["sunset"]).strftime("%I:%M %p")
@@ -66,23 +67,29 @@ def get_weather_data(city):
     except KeyError:
         return {"error": "City not found!"}
 
-# A helper function to get forecast data
-def get_daily_forecast(lat, lon):
-    forecast_url = f"https://api.openweathermap.org/data/3.0/onecall?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&exclude=minutely,hourly,alerts"
+# A helper function to get forecast data using the 2.5 API
+def get_5_day_forecast(city):
+    forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={API_KEY}&units=metric"
     try:
         response = requests.get(forecast_url)
         response.raise_for_status()
         data = response.json()
-        forecasts = data['daily'][:10]
+        
         daily_forecasts = []
-        for day in forecasts:
-            daily_forecasts.append({
-                "date": datetime.fromtimestamp(day['dt']).strftime('%a, %b %d'),
-                "temp_max": round(day['temp']['max']),
-                "temp_min": round(day['temp']['min']),
-                "icon": day['weather'][0]['icon'],
-                "description": day['weather'][0]['description'].title()
-            })
+        # The API returns data in 3-hour intervals, so we'll grab one entry per day
+        # We can identify daily entries by checking the time (e.g., around noon)
+        dates_seen = set()
+        for forecast in data['list']:
+            forecast_date = datetime.fromtimestamp(forecast['dt']).strftime('%a, %b %d')
+            if forecast_date not in dates_seen:
+                daily_forecasts.append({
+                    "date": forecast_date,
+                    "temp_max": round(forecast['main']['temp_max']),
+                    "temp_min": round(forecast['main']['temp_min']),
+                    "icon": forecast['weather'][0]['icon'],
+                    "description": forecast['weather'][0]['description'].title()
+                })
+                dates_seen.add(forecast_date)
         return daily_forecasts
     except (requests.exceptions.RequestException, KeyError) as e:
         st.error(f"Error fetching forecast data: {e}")
@@ -122,8 +129,8 @@ if search_button:
         st.write("---")
         
         # --- Display forecast ---
-        st.subheader("10-Day Forecast")
-        forecast_cols = st.columns(10)
+        st.subheader("5-Day Forecast")
+        forecast_cols = st.columns(len(weather["forecast"]))
         for i, day in enumerate(weather["forecast"]):
             with forecast_cols[i]:
                 st.write(day['date'])
