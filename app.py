@@ -4,49 +4,51 @@ from datetime import datetime
 import pickle
 import os
 
- 
-
-# Set up the Streamlit page
+# -------------------------------
+# 🔧 Streamlit Page Configuration
+# -------------------------------
 st.set_page_config(
     page_title="Weather Dashboard",
     page_icon="☀️",
     layout="wide",
 )
 
-# Replace with your actual API key
-# Warning: Do not use this key in a production environment, as it's publicly visible.
+# -------------------------------
+# 🔐 API Key (Warning: Keep Safe)
+# -------------------------------
 API_KEY = "abc7e74fada486e88d6b22f5ce803319"
 
-# Load the trained ML model if it exists
+# -------------------------------
+# 📦 Load ML Model (Optional)
+# -------------------------------
 try:
     with open('weather_model.pkl', 'rb') as f:
         ml_model = pickle.load(f)
-    model_status = "Model loaded successfully."
+    model_status = "✅ ML model loaded successfully."
 except FileNotFoundError:
-    model_status = "Warning: weather_model.pkl not found. Prediction features will not work."
+    model_status = "⚠️ weather_model.pkl not found. ML prediction disabled."
     ml_model = None
 
-# A helper function to fetch weather data
+# -------------------------------
+# 🌤️ Get Current Weather
+# -------------------------------
 def get_weather_data(city):
-    """
-    Fetches current weather data for a given city from the OpenWeatherMap API.
-    """
     base_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
     try:
         response = requests.get(base_url)
         response.raise_for_status()
         data = response.json()
-        
-        lat = data['coord']['lat']
-        lon = data['coord']['lon']
-        # Call the new function to get the 5-day forecast
-        forecast_data = get_5_day_forecast(city)
 
-        sunrise = datetime.fromtimestamp(data["sys"]["sunrise"]).strftime("%I:%M %p")
-        sunset = datetime.fromtimestamp(data["sys"]["sunset"]).strftime("%I:%M %p")
+        # Timezone correction
+        timezone_offset = data.get("timezone", 0)
+        sunrise = datetime.utcfromtimestamp(data["sys"]["sunrise"] + timezone_offset).strftime("%I:%M %p")
+        sunset = datetime.utcfromtimestamp(data["sys"]["sunset"] + timezone_offset).strftime("%I:%M %p")
         day_length_seconds = data["sys"]["sunset"] - data["sys"]["sunrise"]
         hours = day_length_seconds // 3600
         minutes = (day_length_seconds % 3600) // 60
+
+        # Get forecast
+        forecast_data = get_5_day_forecast(city)
 
         return {
             "city": data["name"],
@@ -69,21 +71,21 @@ def get_weather_data(city):
     except KeyError:
         return {"error": "City not found!"}
 
-# A helper function to get forecast data using the 2.5 API
+# -------------------------------
+# 📅 Get 5-Day Forecast (one per day)
+# -------------------------------
 def get_5_day_forecast(city):
     forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={API_KEY}&units=metric"
     try:
         response = requests.get(forecast_url)
         response.raise_for_status()
         data = response.json()
-        
+
         daily_forecasts = []
-        # The API returns data in 3-hour intervals, so we'll grab one entry per day
-        # We can identify daily entries by checking the time (e.g., around noon)
         dates_seen = set()
         for forecast in data['list']:
             forecast_date = datetime.fromtimestamp(forecast['dt']).strftime('%a, %b %d')
-            if forecast_date not in dates_seen:
+            if forecast_date not in dates_seen and len(daily_forecasts) < 5:
                 daily_forecasts.append({
                     "date": forecast_date,
                     "temp_max": round(forecast['main']['temp_max']),
@@ -97,46 +99,72 @@ def get_5_day_forecast(city):
         st.error(f"Error fetching forecast data: {e}")
         return []
 
-# --- UI Components and Logic ---
+# -------------------------------
+# 🧠 ML Prediction (Optional)
+# -------------------------------
+def predict_temperature(date_str):
+    if not ml_model:
+        return "Model not loaded."
+    try:
+        input_date = datetime.strptime(date_str, "%Y-%m-%d")
+        features = [[input_date.month, input_date.day]]
+        predicted_temp = round(ml_model.predict(features)[0])
+        return f"🌡️ Predicted temperature: {predicted_temp}°C"
+    except Exception as e:
+        return f"Prediction failed: {e}"
 
-st.sidebar.title("Weather Dashboard")
+# -------------------------------
+# 🖥️ UI Components
+# -------------------------------
+st.sidebar.title("🌍 Weather Dashboard")
 st.sidebar.markdown(model_status)
 
-# User input for city
-city = st.sidebar.text_input("Enter a city", "Kathmandu")
-search_button = st.sidebar.button("Get Weather")
+# 🌆 City input
+city = st.sidebar.text_input("Enter city name", value="Mumbai")
+search = st.sidebar.button("🔍 Get Weather")
 
-# --- Display current weather ---
-if search_button:
+# 📅 Optional ML prediction
+st.sidebar.markdown("### 🔮 Temperature Predictor")
+pred_date = st.sidebar.date_input("Pick a date for prediction")
+if st.sidebar.button("Predict Temperature"):
+    prediction_result = predict_temperature(str(pred_date))
+    st.sidebar.success(prediction_result)
+
+# ----------------------------------
+# 📊 Main Section: Weather Display
+# ----------------------------------
+if search:
     weather = get_weather_data(city)
-    
     if "error" in weather:
         st.error(weather["error"])
     else:
-        st.header(f"Weather for {weather['city']}")
+        # Current Weather Header
+        st.header(f"🌤️ Current Weather in {weather['city']}")
         col1, col2, col3 = st.columns(3)
+
         with col1:
-            st.metric("Temperature", f"{weather['temp']}°C")
+            st.metric("🌡️ Temperature", f"{weather['temp']}°C")
             st.write(f"Feels like: {weather['feels_like']}°C")
-            st.write(f"Description: {weather['description']}")
-        
+            st.write(f"📄 {weather['description']}")
+
         with col2:
-            st.metric("Humidity", f"{weather['humidity']}%")
-            st.metric("Wind Speed", f"{weather['wind_speed']} m/s")
-        
+            st.metric("💧 Humidity", f"{weather['humidity']}%")
+            st.metric("💨 Wind Speed", f"{weather['wind_speed']} m/s")
+
         with col3:
-            st.metric("Sunrise", weather['sunrise'])
-            st.metric("Sunset", weather['sunset'])
-            
+            st.metric("🌅 Sunrise", weather['sunrise'])
+            st.metric("🌇 Sunset", weather['sunset'])
+            st.metric("🕒 Day Length", weather['day_length'])
+
         st.write("---")
-        
-        # --- Display forecast ---
-        st.subheader("5-Day Forecast")
+
+        # Forecast
+        st.subheader("📅 5-Day Forecast")
         forecast_cols = st.columns(len(weather["forecast"]))
         for i, day in enumerate(weather["forecast"]):
             with forecast_cols[i]:
-                st.write(day['date'])
-                st.image(f"http://openweathermap.org/img/wn/{day['icon']}@2x.png", width=50)
-                st.write(f"High: {day['temp_max']}°C")
-                st.write(f"Low: {day['temp_min']}°C")
-        
+                st.markdown(f"**{day['date']}**")
+                st.image(f"http://openweathermap.org/img/wn/{day['icon']}@2x.png", width=60)
+                st.write(f"🔼 {day['temp_max']}°C")
+                st.write(f"🔽 {day['temp_min']}°C")
+                st.caption(day["description"])
