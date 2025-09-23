@@ -99,19 +99,6 @@ def get_5_day_forecast(city):
         st.error(f"Error fetching forecast data: {e}")
         return []
 
-# -------------------------------
-# 🧠 ML Prediction (Optional)
-# -------------------------------
-def predict_temperature(date_str):
-    if not ml_model:
-        return "Model not loaded."
-    try:
-        input_date = datetime.strptime(date_str, "%Y-%m-%d")
-        features = [[input_date.month, input_date.day]]
-        predicted_temp = round(ml_model.predict(features)[0])
-        return f"🌡️ Predicted temperature: {predicted_temp}°C"
-    except Exception as e:
-        return f"Prediction failed: {e}"
 
 # -------------------------------
 # 🖥️ UI Components
